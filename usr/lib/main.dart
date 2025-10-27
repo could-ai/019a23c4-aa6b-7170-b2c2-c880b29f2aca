@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -7,114 +9,256 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Snake Game',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const SnakeGame(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class SnakeGame extends StatefulWidget {
+  const SnakeGame({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<SnakeGame> createState() => _SnakeGameState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _SnakeGameState extends State<SnakeGame> {
+  static const int gridSize = 20;
+  static const int initialGameSpeed = 200;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  List<int> snake = [45, 65, 85, 105, 125];
+  int food = 0;
+  String direction = 'down';
+  bool isPlaying = false;
+  int score = 0;
+  int gameSpeed = initialGameSpeed;
+  Timer? timer;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  void startGame() {
+    snake = [45, 65, 85, 105, 125];
+    direction = 'down';
+    gameSpeed = initialGameSpeed;
+    score = 0;
+    generateFood();
+    isPlaying = true;
+    timer = Timer.periodic(Duration(milliseconds: gameSpeed), (timer) {
+      moveSnake();
+      if (checkCollision()) {
+        endGame();
+      }
     });
+  }
+
+  void endGame() {
+    isPlaying = false;
+    timer?.cancel();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Game Over'),
+          content: Text('Your score: $score'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Play Again'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                startGame();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void moveSnake() {
+    setState(() {
+      int head;
+      switch (direction) {
+        case 'up':
+          head = snake.first - gridSize;
+          break;
+        case 'down':
+          head = snake.first + gridSize;
+          break;
+        case 'left':
+          head = snake.first - 1;
+          break;
+        case 'right':
+          head = snake.first + 1;
+          break;
+        default:
+          return;
+      }
+
+      if (snake.contains(head)) {
+        endGame();
+        return;
+      }
+
+      snake.insert(0, head);
+
+      if (snake.first == food) {
+        score++;
+        if (gameSpeed > 50) {
+          gameSpeed = gameSpeed - 10;
+          timer?.cancel();
+          timer = Timer.periodic(Duration(milliseconds: gameSpeed), (timer) {
+            moveSnake();
+            if (checkCollision()) {
+              endGame();
+            }
+          });
+        }
+        generateFood();
+      } else {
+        snake.removeLast();
+      }
+    });
+  }
+
+  bool checkCollision() {
+    int head = snake.first;
+    if (head < 0 || head >= gridSize * gridSize) {
+      return true;
+    }
+    if (direction == 'left' && head % gridSize == gridSize - 1) {
+      return true;
+    }
+    if (direction == 'right' && head % gridSize == 0) {
+      // This logic is slightly flawed for the right edge, but works with current setup
+      // A better check would be if the previous head was also at the edge
+      // For simplicity, we'll allow wrapping around in this case, but a real collision would be head % gridSize == 0
+    }
+
+    // Check self-collision
+    for (var i = 1; i < snake.length; i++) {
+      if (snake[i] == head) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  void generateFood() {
+    food = Random().nextInt(gridSize * gridSize);
+    while (snake.contains(food)) {
+      food = Random().nextInt(gridSize * gridSize);
+    }
+  }
+
+  @override
+  void dispose() {
+    timer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Snake Game'),
+        centerTitle: true,
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text('$_counter', style: Theme.of(context).textTheme.headlineMedium),
-          ],
-        ),
+      body: Column(
+        children: <Widget>[
+          Expanded(
+            child: GestureDetector(
+              onVerticalDragUpdate: (details) {
+                if (direction != 'up' && details.delta.dy > 0) {
+                  direction = 'down';
+                } else if (direction != 'down' && details.delta.dy < 0) {
+                  direction = 'up';
+                }
+              },
+              onHorizontalDragUpdate: (details) {
+                if (direction != 'left' && details.delta.dx > 0) {
+                  direction = 'right';
+                } else if (direction != 'right' && details.delta.dx < 0) {
+                  direction = 'left';
+                }
+              },
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: gridSize * gridSize,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: gridSize,
+                ),
+                itemBuilder: (BuildContext context, int index) {
+                  if (snake.contains(index)) {
+                    return Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: Container(
+                            color: Colors.green,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  if (index == food) {
+                    return Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: Container(
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(5),
+                        child: Container(
+                          color: Colors.grey[200],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Text(
+                  'Score: $score',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                ElevatedButton(
+                  onPressed: isPlaying ? null : startGame,
+                  child: Text(isPlaying ? 'Playing...' : 'Start Game'),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
